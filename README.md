@@ -1,4 +1,4 @@
 distractacator
 ==============
 
-Visual event distration machine.
+Visual event distraction machine.

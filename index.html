@@ -1,0 +1,154 @@
+<html>
+  <head>
+    <title>Distractacator</title>
+    <style>
+      img {
+        width: 400px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="current-time"></div>
+    <img id="img0"/>
+    <img id="img1"/>
+    <img id="img2"/>
+    <img id="img3"/>
+    <img id="img4"/>
+    <img id="img5"/>
+    <img id="img6"/>
+    <img id="img7"/>
+  </body>
+  <script>
+    /* TODO:
+      test controls
+      Visualize
+      Move to nexus 7.
+     */
+
+    var SECONDS = 1000, MINUTES = 60*SECONDS, HOURS=60*MINUTES, DAYS=24*HOURS;
+    var TIME_HORIZON = 4 * DAYS;
+    var OVERLAP_INTERVAL = 2 * MINUTES;
+    var RECHECK_INTERVAL = 60 * SECONDS;
+    var SALT = ("anime,funny,rocket,robot,nasa,geometry,math,lol,cat,trippy,awesome,nerd,code,design,strange,"
+             + "architecture,tech,horror,bunny,star wars,dr who,matrix,laser,space,dance,explosion").split(',');
+
+    var requestID = 0;
+    var schedule = [];
+    var animationTimeout;
+    var currentEvent;
+    var scriptStart = new Date();
+
+    function load() {
+      gapi.auth.authorize({
+          client_id:'102686879623-2b4o25tr4df1h4huf09nhdpcgs4hs84c.apps.googleusercontent.com',
+          immediate: false,
+          scope: 'https://www.googleapis.com/auth/calendar.readonly'
+        }, authenticated);
+    }
+
+    function authenticated() { 
+      gapi.client.load('calendar','v3', startCalendarUpdates);
+    }
+
+    function startCalendarUpdates() {
+      requestCalendars();
+      setInterval(requestCalendars, RECHECK_INTERVAL);
+    }
+
+    function requestCalendars() {
+      gapi.client.calendar.calendarList.list().execute(withCalendars);
+
+      function withCalendars(resp) {
+        requestEvents(resp.result.items.map(function(c) { return c.id }));
+      }
+    }
+
+    function choose(a,n) {
+      if (n<1 || a.length < 1) return [];
+      var next = a.slice(0);
+      return next.splice((Math.random()*a.length)|0,1).concat(choose(next,n-1));
+    }
+
+    function requestEvents(calendarIds) {
+      calendarIds.reduce( function(next,id) { return function(events) {
+        gapi.client.calendar.events.list({
+          calendarId:id,
+          timeMin:new Date().toISOString(), 
+          timeMax:new Date(new Date().getTime() + TIME_HORIZON).toISOString(), 
+          orderBy:'startTime', 
+          singleEvents:true
+        }).execute(function(resp) {
+          next(events.concat(resp.result.items||[]));
+        })
+      }}, reschedule)([]);
+    }
+
+    function reschedule(events) {
+      events = events.filter(function(e) { return e.start && e.start.dateTime; });
+      events.sort(function(a,b) { return eventStart(a).getTime() - eventStart(b).getTime(); });
+      schedule = events;
+      animate();
+    }
+
+    function eventStart(event) { return new Date(event.start.dateTime); }
+
+    function animate() {
+      clearTimeout(animationTimeout);
+      updateSchedule();
+      document.getElementById('current-time').innerHTML = (currentEvent||{}).summary + ' (' +currentTime() +')';
+      animationTimeout = setTimeout(animate, 2*SECONDS);
+    }
+
+    function updateSchedule() {
+      while (schedule[0] && new Date(schedule[0].start.dateTime) < currentTime()) schedule.splice(0,1);
+      if ( ! currentEvent || currentEvent.summary != (schedule[0]||{}).summary ) {
+        currentEvent = schedule[0];
+        currentEvent ? fetchImages(currentEvent) : renderImages([]);
+      }      
+    }
+
+    function fetchImages(event) {
+      var salt = choose(SALT,2);
+      var cleanSummary = event.summary.replace(/\W/g,' ').replace(/\s+/g,' ').split();
+      var query = choose(salt.concat(cleanSummary),5).join(' ');
+      console.log(query);
+      imageRequest(query, renderImages);
+    }
+
+    function renderImages(imageURLs) {
+      var selectedImages = choose(imageURLs,8);
+      [0,1,2,3,4,5,6,7].forEach(function (id, i) {
+        document.getElementById('img'+id).setAttribute('src', selectedImages[i] || '');
+      });
+    }
+
+    function imageRequest(query, cb) {
+      var url = 'http://ajax.googleapis.com/ajax/services/search/images'
+      var query = 'v=1.0&rsz=8&imgtype=animated&q='+encodeURIComponent(query)
+      jsonpRequest(url+'?'+query, function(r) {
+        cb(r.responseData.results.map(function(i) { return i.url; })); 
+      });
+    }
+
+    function currentTime() {
+      return new Date(scriptStart.getTime() +2*DAYS + 2*60*60 * (new Date().getTime() - scriptStart.getTime()));
+    }
+
+    function jsonpRequest(url,cb) {
+      var request = 'jsonp_request_'+(requestID++);
+      var responseHandler = request+'_handler';
+
+      window[responseHandler] = function(response) {
+        delete window[responseHandler];
+        document.getElementById(request).remove();
+        cb(response);
+      }
+
+      var script = document.createElement('script');
+      script.setAttribute('src', url + (url.match(/\?/) ? '&':'?') + 'callback='+responseHandler);
+      script.id = request;
+      document.body.appendChild(script);
+    }
+  </script>
+  <script src="https://apis.google.com/js/client.js?onload=load"></script>
+<html>
