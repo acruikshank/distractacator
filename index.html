@@ -8,9 +8,21 @@
         color: #fff;
       }
 
-      .gif {
+      .gif, .color {
+        display: none;
         position: absolute;
+        top:0;
+        left:0;
+        bottom:0;
+        width:100%;
+        overflow: hidden;
       }
+
+      .level3 #color0 { display: block; z-index:2; }
+      .level4 #color1 { display: block; z-index:3; }
+      .level4 #color2 { display: block; z-index:3; }
+      .level5 #color3 { display: block; z-index:4; }
+      .level5 #color4 { display: block; z-index:4; }
 
       .gif img {
         position: absolute;
@@ -27,6 +39,11 @@
   </head>
   <body>
     <div id="current-time"></div>
+    <div id="color0" class="color"></div>
+    <div id="color1" class="color"></div>
+    <div id="color2" class="color"></div>
+    <div id="color3" class="color"></div>
+    <div id="color4" class="color"></div>
     <div id="img0" class="gif"><img/></div>
     <div id="img1" class="gif"><img/></div>
     <div id="img2" class="gif"><img/></div>
@@ -69,6 +86,7 @@
     var SALT = ("anime,funny,rocket,robot,nasa,geometry,math,lol,cat,trippy,awesome,nerd,code,design,strange,"
              + "architecture,tech,horror,bunny,star wars,dr who,matrix,laser,space,dance,explosion,"
              + "visualization").split(',');
+    var COLORS = ['#000','#f00','#0f0','#00f','#ff0','#f0f','#0ff','#fff'];
 
     var requestID = 0;
     var schedule = [];
@@ -77,6 +95,7 @@
     var scriptStart = new Date();
     var imgDivs = Array.prototype.slice.call(document.querySelectorAll('.gif'),0);
     var imgs = Array.prototype.slice.call(document.querySelectorAll('.gif img'),0);
+    var colorDivs = Array.prototype.slice.call(document.querySelectorAll('.color'),0);
 
     function load() {
       gapi.auth.authorize({
@@ -109,6 +128,8 @@
       return next.splice((Math.random()*a.length)|0,1).concat(choose(next,n-1));
     }
 
+    function random(start,end) { return start + ((Math.random()*(end-start))|0); }
+
     function requestEvents(calendarIds) {
       calendarIds.reduce( function(next,id) { return function(events) {
         gapi.client.calendar.events.list({
@@ -137,30 +158,68 @@
       updateSchedule();
       document.getElementById('current-time').innerHTML = (currentEvent||{}).summary + ' (' +currentTime() +')';
 
-      document.getElementById('levels').innerHTML = choose([0,1,2,3,4,5,6,7],8).map(
-        function(d,i) { return scene(imgDivs[d],imgs[d],i) }).join('\n'); 
+      var validImages = imgDivs.filter(function(d) { return d.querySelector('img').naturalWidth; });
+      var imageStack = choose(validImages, validImages.length);
+
+      document.getElementById('levels').innerHTML = scene(imageStack);
 
       animationTimeout = setTimeout(animate, 2*SECONDS);
     }
 
-    function scene(imgDiv, img, index) {
-      var style = {};
-      var dims = fill(document.body.offsetWidth, document.body.offsetHeight, img.width, img.height);
-      style['#'+imgDiv.id] = {top:0,left:0,bottom:0,width:'100%','z-index':(8-index)};
-      style['#'+imgDiv.id + ' img'] = {
-        width:dims.w+'px', 
-        height:dims.h+'px',
-        transform:'translate('+dims.x+'px,'+dims.y+'px)'
-      };
-      return toCSS(style);
+    function scene(imageStack) {      
+      var page = {w:document.body.offsetWidth, h:document.body.offsetHeight};
+      
+      return imageStack.map(function(imgDiv,level) {
+        var img = imgDiv.querySelector('img');
+        var style = {};
+        var offset = divideWindow(Math.pow(2,level), page.w, page.h);
+
+        var dims = fill(page.w, page.h, img.width, img.height);
+        style['#'+imgDiv.id] = {display:'block', 'z-index':level+1, 
+          left: offset.x + 'px', 
+          top: offset.y + 'px',
+          width:offset.w + 'px', 
+          height:offset.h + 'px'
+        };
+        style['#'+imgDiv.id + ' img'] = {
+          width:dims.w+'px',
+          height:dims.h+'px',
+          transform:'translate('+(dims.x-offset.x)+'px,'+(dims.y-offset.y)+'px)'
+        };
+        return toCSS('.level'+(level+1) + ' ', style);
+      }).join('\n\n')
+
+      + colorDivs.map(function(colorDiv,index) {
+        var style = {};
+        var offset = divideWindow(Math.pow(2,index+1), page.w, page.h);
+        style['#color'+index] = {
+          left: offset.x + 'px', 
+          top: offset.y + 'px',
+          width:offset.w + 'px', 
+          height:offset.h + 'px',
+          'background-color': choose(COLORS,1)[0]
+        }
+        return toCSS('',style);
+      }).join('\n\n')
     }
 
-    function toCSS(obj) {
+    function divideWindow(sections, width, height) {
+      var topLeft = {x:random(0,sections), y:random(0,sections)};
+      var bottomRight = {x:1+random(topLeft.x,sections), y:1+random(topLeft.y,sections)};
+      return {
+        x: (topLeft.x*width/sections), 
+        y:(topLeft.y*height/sections),
+        w:(bottomRight.x-topLeft.x)*width/sections,
+        h:(bottomRight.y-topLeft.y)*height/sections
+      };
+    }
+
+    function toCSS(prefix, obj) {
       var css = '';
       for (var key in obj) {
-        css += key + (typeof obj[key] === 'object'
-          ? ' {\n' +  toCSS(obj[key]) + '}\n\n'
-          : ': ' + obj[key] + ';\n');
+        css += (typeof obj[key] === 'object'
+          ? prefix + key + ' {\n' +  toCSS(prefix+key+' ', obj[key]) + '}\n\n'
+          : key + ': ' + obj[key] + ';\n');
       }
       return css;
     }
