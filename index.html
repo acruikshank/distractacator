@@ -88,7 +88,7 @@
       gapi.auth.authorize({
           client_id:'102686879623-2b4o25tr4df1h4huf09nhdpcgs4hs84c.apps.googleusercontent.com',
           immediate: false,
-          scope: 'https://www.googleapis.com/auth/calendar.readonly'
+          scope: 'http://www.googleapis.com/auth/calendar.readonly'
         }, authenticated);
     }
 
@@ -281,7 +281,7 @@
     }
 
     function imageRequest(query, cb) {
-      var url = 'http://ajax.googleapis.com/ajax/services/search/images'
+      var url = '//ajax.googleapis.com/ajax/services/search/images'
       var query = 'v=1.0&rsz=8&imgtype=animated&q='+encodeURIComponent(query)
       jsonpRequest(url+'?'+query, function(r) {
         cb((r.responseData||{results:[]}).results.map(function(i) { return i.url; })); 
@@ -314,5 +314,5 @@
       document.body.appendChild(script);
     }
   </script>
-  <script src="https://apis.google.com/js/client.js?onload=load"></script>
+  <script src="//apis.google.com/js/client.js?onload=load"></script>
 <html>
