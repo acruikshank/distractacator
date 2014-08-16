@@ -1,0 +1,318 @@
+<html>
+  <head>
+    <title>Distractacator</title>
+    <style>
+      body {
+        margin: 0;
+        background-color: #000;
+        color: #fff;
+      }
+
+      .gif, .color {
+        display: none;
+        position: absolute;
+        top:0;
+        left:0;
+        bottom:0;
+        width:100%;
+        overflow: hidden;
+      }
+
+      .level3 #color0 { display: block; z-index:2; }
+      .level4 #color1 { display: block; z-index:3; }
+      .level4 #color2 { display: block; z-index:3; }
+      .level5 #color3 { display: block; z-index:4; }
+      .level5 #color4 { display: block; z-index:4; }
+
+      .gif img {
+        position: absolute;
+      }
+
+      #current-time {
+        display: none;
+        position: relative;
+        z-index: 10;
+        font-weight: bold;
+        font-family: 'Helvetica';
+      }
+    </style>
+    <style id="levels"></style>
+  </head>
+  <body>
+    <div id="current-time"></div>
+    <div id="color0" class="color"></div>
+    <div id="color1" class="color"></div>
+    <div id="color2" class="color"></div>
+    <div id="color3" class="color"></div>
+    <div id="color4" class="color"></div>
+    <div id="img0" class="gif"><img/></div>
+    <div id="img1" class="gif"><img/></div>
+    <div id="img2" class="gif"><img/></div>
+    <div id="img3" class="gif"><img/></div>
+    <div id="img4" class="gif"><img/></div>
+    <div id="img5" class="gif"><img/></div>
+    <div id="img6" class="gif"><img/></div>
+    <div id="img7" class="gif"><img/></div>
+  </body>
+  <script>
+
+    var SECONDS = 1000, MINUTES = 60*SECONDS, HOURS=60*MINUTES, DAYS=24*HOURS;
+    var TIME_HORIZON = 7 * DAYS;
+    var OVERLAP_INTERVAL = 2 * MINUTES;
+    var RECHECK_INTERVAL = 60 * SECONDS;
+    var SALT = ("anime,funny,rocket,robot,nasa,geometry,math,lol,cat,trippy,awesome,nerd,code,design,strange,"
+             + "architecture,tech,horror,bunny,star wars,dr who,matrix,laser,space,dance,explosion,"
+             + "visualization").split(',');
+    var COLORS = ['#000','#f00','#0f0','#00f','#ff0','#f0f','#0ff','#fff'];
+
+    var requestID = 0;
+    var schedule = [];
+    var animationSchedule = [];
+    var sceneTimeout;
+    var animationTimeout;
+    var currentEvent;
+    var scriptStart = new Date();
+    var imgDivs = Array.prototype.slice.call(document.querySelectorAll('.gif'),0);
+    var imgs = Array.prototype.slice.call(document.querySelectorAll('.gif img'),0);
+    var colorDivs = Array.prototype.slice.call(document.querySelectorAll('.color'),0);
+
+    function choose(a,n) {
+      if (n<1 || a.length < 1) return [];
+      var next = a.slice(0);
+      return next.splice((Math.random()*a.length)|0,1).concat(choose(next,n-1));
+    }
+
+    function random(start,end) { return start + ((Math.random()*(end-start))|0); }
+
+    function load() {
+      gapi.auth.authorize({
+          client_id:'102686879623-2b4o25tr4df1h4huf09nhdpcgs4hs84c.apps.googleusercontent.com',
+          immediate: false,
+          scope: 'https://www.googleapis.com/auth/calendar.readonly'
+        }, authenticated);
+    }
+
+    function authenticated() { 
+      gapi.client.load('calendar','v3', startCalendarUpdates);
+    }
+
+    function startCalendarUpdates() {
+      requestCalendars();
+      setInterval(requestCalendars, RECHECK_INTERVAL);
+    }
+
+    function requestCalendars() {
+      gapi.client.calendar.calendarList.list().execute(withCalendars);
+
+      function withCalendars(resp) {
+        requestEvents(resp.result.items.map(function(c) { return c.id }));
+      }
+    }
+
+    function requestEvents(calendarIds) {
+      calendarIds.reduce( function(next,id) { return function(events) {
+        gapi.client.calendar.events.list({
+          calendarId:id,
+          timeMin:new Date(new Date().getTime() - TIME_HORIZON).toISOString(), 
+          timeMax:new Date(new Date().getTime() + TIME_HORIZON).toISOString(), 
+          orderBy:'startTime', 
+          singleEvents:true
+        }).execute(function(resp) {
+          next(events.concat(resp.result.items||[]));
+        })
+      }}, reschedule)([]);
+    }
+
+    function reschedule(events) {
+      events = events.filter(function(e) { return e.start && e.start.dateTime; });
+      events.sort(function(a,b) { return eventStart(a).getTime() - eventStart(b).getTime(); });
+      schedule = events;
+      nextScene();
+    }
+
+    function eventStart(event) { return new Date(event.start.dateTime); }
+
+    function nextScene() {
+      clearTimeout(sceneTimeout);
+      updateSchedule();
+      document.getElementById('current-time').innerHTML = (currentEvent||{}).summary + ' (' +currentTime() +')';
+
+      var validImages = imgDivs.filter(function(d) { return d.querySelector('img').naturalWidth; });
+      var imageStack = choose(validImages, validImages.length);
+
+      document.getElementById('levels').innerHTML = scene(imageStack);
+
+      var timeTillEvent = eventStart(currentEvent).getTime() - currentTime().getTime();
+      var period = 1*SECONDS;
+
+      console.log(timeTillEvent/MINUTES);
+
+      if (timeTillEvent > 16*MINUTES) {
+        document.body.setAttribute('class','');
+        animationSchedule = [];
+      } else if (timeTillEvent > 4*MINUTES) {
+        period = 4*SECONDS + 26*SECONDS*(timeTillEvent - (4*MINUTES))/(12*MINUTES);
+        animationSchedule = createToggleSchedule( period );
+     } else if (timeTillEvent > 0) {
+        period = 4*SECONDS;
+
+        var depth = parseInt(5*(4*MINUTES-timeTillEvent) / (3.5*MINUTES));
+        animationSchedule = createGlitchSchedule( period, depth );
+     }
+      
+      animate();
+      sceneTimeout = setTimeout(nextScene, period);
+    }
+
+    function animate() {
+      clearTimeout(animationTimeout);
+      if (animationSchedule.length) {
+        var step = animationSchedule.splice(0,1)[0];
+        document.body.setAttribute('class',step.c);
+        animationTimeout = setTimeout(animate, step.t);
+      }
+    }
+
+    function createToggleSchedule( period ) {
+      return [{c:'level1', t:(period/2)|0}, {c:'', t:(period/2)|0}];
+    }
+
+    function createGlitchSchedule( period, depth, prefix, level ) {
+      prefix = prefix || 'level1';
+      level = level || 2;
+      if (depth < 2) return glitch(period,prefix,level);
+      return (Math.random()<.75 
+        ? createGlitchSchedule( period/2, depth-1, prefix+' level'+level, level+1)
+        : glitch(period,prefix,level))
+      .concat(Math.random()<.75 
+        ? createGlitchSchedule( period/2, depth-1, prefix+' level'+level, level+1)
+        : glitch(period,prefix,level));
+    }
+
+    function glitch( period, prefix, level) {
+      return [
+        {c:prefix,t:period/8},
+        {c:prefix + ' level'+(level+1),t:period/8},
+        {c:prefix,t:period/8},
+        {c:prefix + ' level'+(level+1),t:period/8},
+        {c:prefix,t:period/8},
+        {c:prefix + ' level'+(level+1),t:period/8},
+        {c:prefix,t:period/8},
+        {c:prefix + ' level'+(level+1),t:period/8}
+      ]
+    }
+
+    function scene(imageStack) {      
+      var page = {w:document.body.offsetWidth, h:document.body.offsetHeight};
+      
+      return imageStack.map(function(imgDiv,level) {
+        var img = imgDiv.querySelector('img');
+        var style = {};
+        var offset = divideWindow(Math.pow(2,level), page.w, page.h);
+
+        var dims = fill(page.w, page.h, img.width, img.height);
+        style['#'+imgDiv.id] = {display:'block', 'z-index':level+1, 
+          left: offset.x + 'px', 
+          top: offset.y + 'px',
+          width:offset.w + 'px', 
+          height:offset.h + 'px'
+        };
+        style['#'+imgDiv.id + ' img'] = {
+          width:dims.w+'px',
+          height:dims.h+'px',
+          transform:'translate('+(dims.x-offset.x)+'px,'+(dims.y-offset.y)+'px)'
+        };
+        return toCSS('.level'+(level+1) + ' ', style);
+      }).join('\n\n')
+
+      + colorDivs.map(function(colorDiv,index) {
+        var style = {};
+        var offset = divideWindow(Math.pow(2,index+1), page.w, page.h);
+        style['#color'+index] = {
+          left: offset.x + 'px', 
+          top: offset.y + 'px',
+          width:offset.w + 'px', 
+          height:offset.h + 'px',
+          'background-color': choose(COLORS,1)[0]
+        }
+        return toCSS('',style);
+      }).join('\n\n')
+    }
+
+    function divideWindow(sections, width, height) {
+      var topLeft = {x:random(0,sections), y:random(0,sections)};
+      var bottomRight = {x:1+random(topLeft.x,sections), y:1+random(topLeft.y,sections)};
+      return {
+        x: (topLeft.x*width/sections), 
+        y:(topLeft.y*height/sections),
+        w:(bottomRight.x-topLeft.x)*width/sections,
+        h:(bottomRight.y-topLeft.y)*height/sections
+      };
+    }
+
+    function toCSS(prefix, obj) {
+      var css = '';
+      for (var key in obj) {
+        css += (typeof obj[key] === 'object'
+          ? prefix + key + ' {\n' +  toCSS(prefix+key+' ', obj[key]) + '}\n\n'
+          : key + ': ' + obj[key] + ';\n');
+      }
+      return css;
+    }
+
+    function updateSchedule() {
+      while (schedule[0] && new Date(schedule[0].start.dateTime) < currentTime()) schedule.splice(0,1);
+      if ( ! currentEvent || currentEvent.summary != (schedule[0]||{}).summary ) {
+        currentEvent = schedule[0];
+        currentEvent ? fetchImages(currentEvent) : renderImages([]);
+      }      
+    }
+
+    function fetchImages(event) {
+      var salt = choose(SALT,2);
+      var cleanSummary = event.summary.replace(/\W/g,' ').replace(/\s+/g,' ').split(' ');
+      var query = choose(salt.concat(cleanSummary),5).join(' ');
+      imageRequest(query, renderImages);
+    }
+
+    function renderImages(imageURLs) {
+      var selectedImages = choose(imageURLs,8);
+      imgs.forEach(function (img, i) { img.setAttribute('src', selectedImages[i] || ''); });
+    }
+
+    function imageRequest(query, cb) {
+      var url = 'http://ajax.googleapis.com/ajax/services/search/images'
+      var query = 'v=1.0&rsz=8&imgtype=animated&q='+encodeURIComponent(query)
+      jsonpRequest(url+'?'+query, function(r) {
+        cb((r.responseData||{results:[]}).results.map(function(i) { return i.url; })); 
+      });
+    }
+
+    function fill( ww, wh, iw, ih ) {
+      var scale = Math.min(ww/iw,wh/ih);
+      return {x:(ww-iw*scale)/2, y:(wh-ih*scale)/2, w:iw*scale, h:ih*scale};
+    }
+
+    function currentTime() {
+      return new Date();
+//      return new Date(scriptStart.getTime() +2*DAYS - 15*MINUTES + 6 * (new Date().getTime() - scriptStart.getTime()));
+    }
+
+    function jsonpRequest(url,cb) {
+      var request = 'jsonp_request_'+(requestID++);
+      var responseHandler = request+'_handler';
+
+      window[responseHandler] = function(response) {
+        delete window[responseHandler];
+        document.getElementById(request).remove();
+        cb(response);
+      }
+
+      var script = document.createElement('script');
+      script.setAttribute('src', url + (url.match(/\?/) ? '&':'?') + 'callback='+responseHandler);
+      script.id = request;
+      document.body.appendChild(script);
+    }
+  </script>
+  <script src="https://apis.google.com/js/client.js?onload=load"></script>
+<html>
