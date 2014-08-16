@@ -2,41 +2,81 @@
   <head>
     <title>Distractacator</title>
     <style>
-      img {
-        width: 400px;
+      body {
+        margin: 0;
+        background-color: #000;
+        color: #fff;
+      }
+
+      .gif {
+        position: absolute;
+      }
+
+      .gif img {
+        position: absolute;
+      }
+
+      #current-time {
+        position: relative;
+        z-index: 10;
+        font-weight: bold;
+        font-family: 'Helvetica';
       }
     </style>
+    <style id="levels"></style>
   </head>
   <body>
     <div id="current-time"></div>
-    <img id="img0"/>
-    <img id="img1"/>
-    <img id="img2"/>
-    <img id="img3"/>
-    <img id="img4"/>
-    <img id="img5"/>
-    <img id="img6"/>
-    <img id="img7"/>
+    <div id="img0" class="gif"><img/></div>
+    <div id="img1" class="gif"><img/></div>
+    <div id="img2" class="gif"><img/></div>
+    <div id="img3" class="gif"><img/></div>
+    <div id="img4" class="gif"><img/></div>
+    <div id="img5" class="gif"><img/></div>
+    <div id="img6" class="gif"><img/></div>
+    <div id="img7" class="gif"><img/></div>
   </body>
   <script>
     /* TODO:
+      levels:
+        0 blank
+        1 1 full screen image
+        2 1 partial image
+        3 1 color + 1 partial image
+        4 2 colors + 1 partial image
+        5 2 colors + 1 partial image
+
+      sequence:
+        16-8 minutes:
+          level 1-0, period 30secs - 5 secs
+        8-4 minutes:
+          level 1, period 5-secs to 1 sec
+        4-2 minutes:
+          sequence 1-3, period 4 sec
+        2-1
+          sequence 1-4, period 4 sec
+        1-0
+          sequence 1-5, period 4 sec
       test controls
       Visualize
       Move to nexus 7.
      */
 
     var SECONDS = 1000, MINUTES = 60*SECONDS, HOURS=60*MINUTES, DAYS=24*HOURS;
-    var TIME_HORIZON = 4 * DAYS;
+    var TIME_HORIZON = 7 * DAYS;
     var OVERLAP_INTERVAL = 2 * MINUTES;
     var RECHECK_INTERVAL = 60 * SECONDS;
     var SALT = ("anime,funny,rocket,robot,nasa,geometry,math,lol,cat,trippy,awesome,nerd,code,design,strange,"
-             + "architecture,tech,horror,bunny,star wars,dr who,matrix,laser,space,dance,explosion").split(',');
+             + "architecture,tech,horror,bunny,star wars,dr who,matrix,laser,space,dance,explosion,"
+             + "visualization").split(',');
 
     var requestID = 0;
     var schedule = [];
     var animationTimeout;
     var currentEvent;
     var scriptStart = new Date();
+    var imgDivs = Array.prototype.slice.call(document.querySelectorAll('.gif'),0);
+    var imgs = Array.prototype.slice.call(document.querySelectorAll('.gif img'),0);
 
     function load() {
       gapi.auth.authorize({
@@ -96,7 +136,33 @@
       clearTimeout(animationTimeout);
       updateSchedule();
       document.getElementById('current-time').innerHTML = (currentEvent||{}).summary + ' (' +currentTime() +')';
+
+      document.getElementById('levels').innerHTML = choose([0,1,2,3,4,5,6,7],8).map(
+        function(d,i) { return scene(imgDivs[d],imgs[d],i) }).join('\n'); 
+
       animationTimeout = setTimeout(animate, 2*SECONDS);
+    }
+
+    function scene(imgDiv, img, index) {
+      var style = {};
+      var dims = fill(document.body.offsetWidth, document.body.offsetHeight, img.width, img.height);
+      style['#'+imgDiv.id] = {top:0,left:0,bottom:0,width:'100%','z-index':(8-index)};
+      style['#'+imgDiv.id + ' img'] = {
+        width:dims.w+'px', 
+        height:dims.h+'px',
+        transform:'translate('+dims.x+'px,'+dims.y+'px)'
+      };
+      return toCSS(style);
+    }
+
+    function toCSS(obj) {
+      var css = '';
+      for (var key in obj) {
+        css += key + (typeof obj[key] === 'object'
+          ? ' {\n' +  toCSS(obj[key]) + '}\n\n'
+          : ': ' + obj[key] + ';\n');
+      }
+      return css;
     }
 
     function updateSchedule() {
@@ -109,7 +175,7 @@
 
     function fetchImages(event) {
       var salt = choose(SALT,2);
-      var cleanSummary = event.summary.replace(/\W/g,' ').replace(/\s+/g,' ').split();
+      var cleanSummary = event.summary.replace(/\W/g,' ').replace(/\s+/g,' ').split(' ');
       var query = choose(salt.concat(cleanSummary),5).join(' ');
       console.log(query);
       imageRequest(query, renderImages);
@@ -117,21 +183,24 @@
 
     function renderImages(imageURLs) {
       var selectedImages = choose(imageURLs,8);
-      [0,1,2,3,4,5,6,7].forEach(function (id, i) {
-        document.getElementById('img'+id).setAttribute('src', selectedImages[i] || '');
-      });
+      imgs.forEach(function (img, i) { img.setAttribute('src', selectedImages[i] || ''); });
     }
 
     function imageRequest(query, cb) {
       var url = 'http://ajax.googleapis.com/ajax/services/search/images'
       var query = 'v=1.0&rsz=8&imgtype=animated&q='+encodeURIComponent(query)
       jsonpRequest(url+'?'+query, function(r) {
-        cb(r.responseData.results.map(function(i) { return i.url; })); 
+        cb((r.responseData||{results:[]}).results.map(function(i) { return i.url; })); 
       });
     }
 
+    function fill( ww, wh, iw, ih ) {
+      var scale = Math.min(ww/iw,wh/ih);
+      return {x:(ww-iw*scale)/2, y:(wh-ih*scale)/2, w:iw*scale, h:ih*scale};
+    }
+
     function currentTime() {
-      return new Date(scriptStart.getTime() +2*DAYS + 2*60*60 * (new Date().getTime() - scriptStart.getTime()));
+      return new Date(scriptStart.getTime() +2*DAYS + 60 * (new Date().getTime() - scriptStart.getTime()));
     }
 
     function jsonpRequest(url,cb) {
