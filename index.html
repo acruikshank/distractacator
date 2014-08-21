@@ -94,11 +94,13 @@
 
     function random(start,end) { return start + ((Math.random()*(end-start))|0); }
 
+    if (window.deviceAuth) {
+      startCalendarUpdates();
+      document.body.style.height = (screen.availHeight/2) + 'px';
+    }
+
     function load() {
-      if (window.deviceAuth) {
-        startCalendarUpdates();
-        document.body.style.height = (screen.availHeight/2) + 'px';
-      } else {
+      if (! window.deviceAuth) {
         authenticate();
         scheduler.interval(authenticate, 180*MINUTES);
       }
