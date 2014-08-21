@@ -6,6 +6,7 @@
         margin: 0;
         background-color: #000;
         color: #fff;
+        height: 100%;
       }
 
       .gif, .color {
@@ -28,18 +29,15 @@
         position: absolute;
       }
 
-      #current-time {
-        display: none;
-        position: relative;
-        z-index: 10;
-        font-weight: bold;
-        font-family: 'Helvetica';
+      #bg {
+        height: 100%;
       }
+
     </style>
     <style id="levels"></style>
   </head>
   <body>
-    <div id="current-time"></div>
+    <div id="bg"></div>
     <div id="color0" class="color"></div>
     <div id="color1" class="color"></div>
     <div id="color2" class="color"></div>
@@ -55,7 +53,6 @@
     <div id="img7" class="gif"><img/></div>
   </body>
   <script>
-
     var SECONDS = 1000, MINUTES = 60*SECONDS, HOURS=60*MINUTES, DAYS=24*HOURS;
     var TIME_HORIZON = 7 * DAYS;
     var OVERLAP_INTERVAL = 2 * MINUTES;
@@ -68,13 +65,26 @@
     var requestID = 0;
     var schedule = [];
     var animationSchedule = [];
-    var sceneTimeout;
-    var animationTimeout;
     var currentEvent;
+    var scheduler = Scheduler();
     var scriptStart = new Date();
     var imgDivs = Array.prototype.slice.call(document.querySelectorAll('.gif'),0);
     var imgs = Array.prototype.slice.call(document.querySelectorAll('.gif img'),0);
     var colorDivs = Array.prototype.slice.call(document.querySelectorAll('.color'),0);
+
+    function Scheduler() {
+      var ids = {};
+      return {
+        interval : function(f,t) { 
+          clearInterval(ids[f.name]);
+          ids[f.name] = setInterval(f,t);
+        },
+        timeout : function(f,t) { 
+          clearTimeout(ids[f.name]);
+          ids[f.name] = setTimeout(f,t);
+        }
+      }
+    }
 
     function choose(a,n) {
       if (n<1 || a.length < 1) return [];
@@ -85,11 +95,21 @@
     function random(start,end) { return start + ((Math.random()*(end-start))|0); }
 
     function load() {
+      if (window.deviceAuth) {
+        startCalendarUpdates();
+        document.body.style.height = (screen.availHeight/2) + 'px';
+      } else {
+        authenticate();
+        scheduler.interval(authenticate, 180*MINUTES);
+      }
+    }
+
+    function authenticate() {
       gapi.auth.authorize({
           client_id:'102686879623-2b4o25tr4df1h4huf09nhdpcgs4hs84c.apps.googleusercontent.com',
           immediate: false,
           scope: 'https://www.googleapis.com/auth/calendar.readonly'
-        }, authenticated);
+        }, authenticated);      
     }
 
     function authenticated() { 
@@ -97,8 +117,18 @@
     }
 
     function startCalendarUpdates() {
-      requestCalendars();
-      setInterval(requestCalendars, RECHECK_INTERVAL);
+      fetchEvents();
+      scheduler.interval(fetchEvents, RECHECK_INTERVAL);
+    }
+
+    function fetchEvents() {
+      if (window.deviceAuth) {
+        return reschedule( JSON.parse(deviceAuth.getEvents()).map(function(event) {
+          return { summary:event.name, start:{dateTime:event.time} };
+        }) );
+      }
+      
+      requestCalendars();      
     }
 
     function requestCalendars() {
@@ -133,9 +163,7 @@
     function eventStart(event) { return new Date(event.start.dateTime); }
 
     function nextScene() {
-      clearTimeout(sceneTimeout);
       updateSchedule();
-      document.getElementById('current-time').innerHTML = (currentEvent||{}).summary + ' (' +currentTime() +')';
 
       var validImages = imgDivs.filter(function(d) { return d.querySelector('img').naturalWidth; });
       var imageStack = choose(validImages, validImages.length);
@@ -143,7 +171,7 @@
       document.getElementById('levels').innerHTML = scene(imageStack);
 
       var timeTillEvent = eventStart(currentEvent).getTime() - currentTime().getTime();
-      var period = 1*SECONDS;
+      var period = 20*SECONDS;
 
       console.log(timeTillEvent/MINUTES);
 
@@ -161,15 +189,14 @@
      }
       
       animate();
-      sceneTimeout = setTimeout(nextScene, period);
+      scheduler.timeout(nextScene, period);
     }
 
     function animate() {
-      clearTimeout(animationTimeout);
       if (animationSchedule.length) {
         var step = animationSchedule.splice(0,1)[0];
         document.body.setAttribute('class',step.c);
-        animationTimeout = setTimeout(animate, step.t);
+        scheduler.timeout(animate, step.t);
       }
     }
 
@@ -203,7 +230,10 @@
     }
 
     function scene(imageStack) {      
-      var page = {w:document.body.offsetWidth, h:document.body.offsetHeight};
+      var page = {
+        w:document.body.offsetWidth || screen.availWidth, 
+        h:document.body.offsetHeight || screen.availHeight
+      };
       
       return imageStack.map(function(imgDiv,level) {
         var img = imgDiv.querySelector('img');
@@ -220,7 +250,8 @@
         style['#'+imgDiv.id + ' img'] = {
           width:dims.w+'px',
           height:dims.h+'px',
-          transform:'translate('+(dims.x-offset.x)+'px,'+(dims.y-offset.y)+'px)'
+          left:(dims.x-offset.x)+'px',
+          right:(dims.y-offset.y)+'px'
         };
         return toCSS('.level'+(level+1) + ' ', style);
       }).join('\n\n')
