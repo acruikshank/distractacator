@@ -210,10 +210,10 @@
       prefix = prefix || 'level1';
       level = level || 2;
       if (depth < 2) return glitch(period,prefix,level);
-      return (Math.random()<.75 
+      return (Math.random()<.80 
         ? createGlitchSchedule( period/2, depth-1, prefix+' level'+level, level+1)
         : glitch(period,prefix,level))
-      .concat(Math.random()<.75 
+      .concat(Math.random()<.80 
         ? createGlitchSchedule( period/2, depth-1, prefix+' level'+level, level+1)
         : glitch(period,prefix,level));
     }
@@ -221,13 +221,13 @@
     function glitch( period, prefix, level) {
       return [
         {c:prefix,t:period/8},
-        {c:prefix + ' level'+(level+1),t:period/8},
+        {c:prefix + ' level'+(level),t:period/8},
         {c:prefix,t:period/8},
-        {c:prefix + ' level'+(level+1),t:period/8},
+        {c:prefix + ' level'+(level),t:period/8},
         {c:prefix,t:period/8},
-        {c:prefix + ' level'+(level+1),t:period/8},
+        {c:prefix + ' level'+(level),t:period/8},
         {c:prefix,t:period/8},
-        {c:prefix + ' level'+(level+1),t:period/8}
+        {c:prefix + ' level'+(level),t:period/8}
       ]
     }
 
@@ -242,8 +242,8 @@
         var style = {};
         var offset = divideWindow(Math.pow(2,level), page.w, page.h);
 
-        var dims = fill(page.w, page.h, img.width, img.height);
-        style['#'+imgDiv.id] = {display:'block', 'z-index':level+1, 
+        var dims = fill(page.w, page.h, img.naturalWidth, img.naturalHeight);
+        style['#'+imgDiv.id] = {'z-index':level+1, 
           left: offset.x + 'px', 
           top: offset.y + 'px',
           width:offset.w + 'px', 
@@ -252,10 +252,12 @@
         style['#'+imgDiv.id + ' img'] = {
           width:dims.w+'px',
           height:dims.h+'px',
-          left:(dims.x-offset.x)+'px',
-          right:(dims.y-offset.y)+'px'
+          left: ((dims.x-offset.x)|0)+'px',
+          top: ((dims.y-offset.y)|0)+'px'
         };
-        return toCSS('.level'+(level+1) + ' ', style);
+        var displayStyle = {};
+        displayStyle['#'+imgDiv.id] = {display:'block'};
+        return toCSS('.level'+(level+1) + ' ', displayStyle)  + '\n' + toCSS('', style);
       }).join('\n\n')
 
       + colorDivs.map(function(colorDiv,index) {
