@@ -60,7 +60,7 @@
     var SALT = ("anime,funny,rocket,robot,nasa,geometry,math,lol,cat,trippy,awesome,nerd,code,design,strange,"
              + "architecture,tech,horror,bunny,star wars,dr who,matrix,laser,space,dance,explosion,"
              + "visualization").split(',');
-    var COLORS = ['#000','#f00','#0f0','#00f','#ff0','#f0f','#0ff','#fff'];
+    var COLORS = ['#545657','#fc0303','#0f0','#0001f9','#ffee02','#fe0ff','#fff9f9'];
 
     var requestID = 0;
     var schedule = [];
@@ -325,12 +325,11 @@
 
     function fill( ww, wh, iw, ih ) {
       var scale = Math.min(ww/iw,wh/ih);
-      return {x:(ww-iw*scale)/2, y:(wh-ih*scale)/2, w:iw*scale, h:ih*scale};
+      return {x:(ww-iw*scale)*Math.random(), y:(wh-ih*scale)*Math.random(), w:iw*scale, h:ih*scale};
     }
 
     function currentTime() {
       return new Date();
-//      return new Date(scriptStart.getTime() +2*DAYS - 15*MINUTES + 6 * (new Date().getTime() - scriptStart.getTime()));
     }
 
     function jsonpRequest(url,cb) {
