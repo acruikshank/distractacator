@@ -75,11 +75,11 @@
     function Scheduler() {
       var ids = {};
       return {
-        interval : function(f,t) { 
+        interval : function(f,t) {
           clearInterval(ids[f.name]);
           ids[f.name] = setInterval(f,t);
         },
-        timeout : function(f,t) { 
+        timeout : function(f,t) {
           clearTimeout(ids[f.name]);
           ids[f.name] = setTimeout(f,t);
         }
@@ -111,10 +111,10 @@
           client_id:'102686879623-2b4o25tr4df1h4huf09nhdpcgs4hs84c.apps.googleusercontent.com',
           immediate: false,
           scope: 'https://www.googleapis.com/auth/calendar.readonly'
-        }, authenticated);      
+        }, authenticated);
     }
 
-    function authenticated() { 
+    function authenticated() {
       gapi.client.load('calendar','v3', startCalendarUpdates);
     }
 
@@ -129,8 +129,8 @@
           return { summary:event.name, start:{dateTime:event.time} };
         }) );
       }
-      
-      requestCalendars();      
+
+      requestCalendars();
     }
 
     function requestCalendars() {
@@ -145,9 +145,9 @@
       calendarIds.reduce( function(next,id) { return function(events) {
         gapi.client.calendar.events.list({
           calendarId:id,
-          timeMin:new Date(new Date().getTime() - TIME_HORIZON).toISOString(), 
-          timeMax:new Date(new Date().getTime() + TIME_HORIZON).toISOString(), 
-          orderBy:'startTime', 
+          timeMin:new Date(new Date().getTime() - TIME_HORIZON).toISOString(),
+          timeMax:new Date(new Date().getTime() + TIME_HORIZON).toISOString(),
+          orderBy:'startTime',
           singleEvents:true
         }).execute(function(resp) {
           next(events.concat(resp.result.items||[]));
@@ -189,7 +189,7 @@
         var depth = parseInt(5*(4*MINUTES-timeTillEvent) / (3.5*MINUTES));
         animationSchedule = createGlitchSchedule( period, depth );
      }
-      
+
       animate();
       scheduler.timeout(nextScene, period);
     }
@@ -210,10 +210,10 @@
       prefix = prefix || 'level1';
       level = level || 2;
       if (depth < 2) return glitch(period,prefix,level);
-      return (Math.random()<.80 
+      return (Math.random()<.80
         ? createGlitchSchedule( period/2, depth-1, prefix+' level'+level, level+1)
         : glitch(period,prefix,level))
-      .concat(Math.random()<.80 
+      .concat(Math.random()<.80
         ? createGlitchSchedule( period/2, depth-1, prefix+' level'+level, level+1)
         : glitch(period,prefix,level));
     }
@@ -231,22 +231,22 @@
       ]
     }
 
-    function scene(imageStack) {      
+    function scene(imageStack) {
       var page = {
-        w:document.body.offsetWidth || screen.availWidth, 
+        w:document.body.offsetWidth || screen.availWidth,
         h:document.body.offsetHeight || screen.availHeight
       };
-      
+
       return imageStack.map(function(imgDiv,level) {
         var img = imgDiv.querySelector('img');
         var style = {};
         var offset = divideWindow(Math.pow(2,level), page.w, page.h);
 
         var dims = fill(page.w, page.h, img.naturalWidth, img.naturalHeight);
-        style['#'+imgDiv.id] = {'z-index':level+1, 
-          left: offset.x + 'px', 
+        style['#'+imgDiv.id] = {'z-index':level+1,
+          left: offset.x + 'px',
           top: offset.y + 'px',
-          width:offset.w + 'px', 
+          width:offset.w + 'px',
           height:offset.h + 'px'
         };
         style['#'+imgDiv.id + ' img'] = {
@@ -264,9 +264,9 @@
         var style = {};
         var offset = divideWindow(Math.pow(2,index+1), page.w, page.h);
         style['#color'+index] = {
-          left: offset.x + 'px', 
+          left: offset.x + 'px',
           top: offset.y + 'px',
-          width:offset.w + 'px', 
+          width:offset.w + 'px',
           height:offset.h + 'px',
           'background-color': choose(COLORS,1)[0]
         }
@@ -278,7 +278,7 @@
       var topLeft = {x:random(0,sections), y:random(0,sections)};
       var bottomRight = {x:1+random(topLeft.x,sections), y:1+random(topLeft.y,sections)};
       return {
-        x: (topLeft.x*width/sections), 
+        x: (topLeft.x*width/sections),
         y:(topLeft.y*height/sections),
         w:(bottomRight.x-topLeft.x)*width/sections,
         h:(bottomRight.y-topLeft.y)*height/sections
@@ -300,7 +300,7 @@
       if ( ! currentEvent || currentEvent.summary != (schedule[0]||{}).summary ) {
         currentEvent = schedule[0];
         currentEvent ? fetchImages(currentEvent) : renderImages([]);
-      }      
+      }
     }
 
     function fetchImages(event) {
@@ -316,11 +316,15 @@
     }
 
     function imageRequest(query, cb) {
-      var url = 'http://ajax.googleapis.com/ajax/services/search/images'
-      var query = 'v=1.0&rsz=8&imgtype=animated&q='+encodeURIComponent(query)
-      jsonpRequest(url+'?'+query, function(r) {
-        cb((r.responseData||{results:[]}).results.map(function(i) { return i.url; })); 
-      });
+      var req = new XMLHttpRequest();
+      req.addEventListener("load", loaded);
+      req.open("GET", "http://api.giphy.com/v1/gifs/search?q="+encodeURIComponent(query)+"&api_key=dc6zaTOxFJmzC");
+      req.send();
+
+      function loaded() {
+        var response = JSON.parse(this.responseText);
+        cb(response.data.map(function(i) { return i.images.downsized_medium.url}));
+      }
     }
 
     function fill( ww, wh, iw, ih ) {
